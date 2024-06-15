@@ -19,3 +19,5 @@
 .vscode/
 
 sess
+
+docker-compose.dev.yaml
