@@ -26,7 +26,7 @@ func GetClient() (*gotgproto.Client, error) {
 		DisableCopyright: true,
 		Session:          sessionMaker.SqlSession(sqlite.Open(cfg.SessionFile)),
 		AuthConversator:  auth_convert,
-		Middlewares:      []telegram.Middleware{floodwait.NewSimpleWaiter().WithMaxRetries(4), ratelimit.New(rate.Every(500*time.Millisecond), 5)},
+		Middlewares:      []telegram.Middleware{floodwait.NewSimpleWaiter().WithMaxRetries(4).WithMaxWait(time.Duration(cfg.MaxFloodWait) * time.Second), ratelimit.New(rate.Every(500*time.Millisecond), 5)},
 		Device:           &device,
 	}
 	client, err := gotgproto.NewClient(
