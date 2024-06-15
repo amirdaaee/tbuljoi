@@ -14,8 +14,6 @@ func forwToSelf(ctx_ *ext.Context, update *ext.Update) error {
 	effChatID := effChat.GetID()
 	ctx := client.NewContext(ctx_, effMsg, &effChat)
 	// ....
-	logrus.SetLevel(logrus.InfoLevel)
-	// ....
 	replied := client.GetRepliedMsg(ctx, effMsg)
 	if replied == nil {
 		return nil
@@ -30,8 +28,6 @@ func joinManyChannel(ctx_ *ext.Context, update *ext.Update) error {
 	effChat := update.EffectiveChat()
 	effChatID := effChat.GetID()
 	ctx := client.NewContext(ctx_, effMsg, &effChat)
-	// ....
-	logrus.SetLevel(logrus.InfoLevel)
 	// ....
 	replied := client.GetRepliedMsg(ctx, effMsg)
 	if replied == nil {
