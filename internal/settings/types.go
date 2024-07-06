@@ -7,4 +7,5 @@ type configType struct {
 	SessionFile  string `env:"SESSION_FILE,required"`
 	LogLevel     string `env:"LOG_LEVEL" envDefault:"WARNING"`
 	MaxFloodWait int    `env:"MAX_FLOOD_WAIT" envDefault:"30"`
+	DeviceName   string `env:"MAX_FLOOD_WAIT" envDefault:"tbuljoi"`
 }

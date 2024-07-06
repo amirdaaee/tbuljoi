@@ -19,8 +19,14 @@ func forwToSelf(ctx_ *ext.Context, update *ext.Update) error {
 		return nil
 	}
 	// ...
+	client.ModifyMessage(ctx, effChatID, effMsg, fmt.Sprintf(START_FORWARDING, effChatID), false)
 	err := client.ForwardMessage(ctx, effChatID, effChatID, replied)
-	client.ModifyMessage(ctx, effChatID, effMsg, "Done!")
+	if err != nil {
+		client.ModifyMessage(ctx, effChatID, effMsg, fmt.Sprintf(FAILED_FORWARDING, effChatID, err), true)
+	} else {
+		client.ModifyMessage(ctx, effChatID, effMsg, fmt.Sprintf(DONE_FORWARDING, effChatID), true)
+	}
+	client.ModifyMessage(ctx, effChatID, effMsg, DONE_ALL, true)
 	return err
 }
 func joinManyChannel(ctx_ *ext.Context, update *ext.Update) error {
@@ -37,24 +43,28 @@ func joinManyChannel(ctx_ *ext.Context, update *ext.Update) error {
 	urls := client.GetInviteLinks(replied)
 	logrus.WithField("urls", urls).Info("start")
 	// ...
-	updateMess := ""
+	var updateMess string
 	var chanIDList []int64
+	client.ModifyMessage(ctx, effChatID, effMsg, fmt.Sprintf(START_JOINING, len(urls)), false)
 	for counter, u := range urls {
 		ll := logrus.WithField("url", u)
 		ll.Info("starting")
 		if chanID, err := client.JoinChannel(ctx, u); err != nil {
 			ll.Error(err)
-			updateMess = updateMess + fmt.Sprintf("%d/%d join error\n", counter+1, len(urls))
+			updateMess = fmt.Sprintf(FAILED_JOIN, counter+1, len(urls), err.Error())
 		} else {
 			chanIDList = append(chanIDList, chanID)
-			updateMess = updateMess + fmt.Sprintf("%d/%d join done\n", counter+1, len(urls))
+			updateMess = fmt.Sprintf(DONE_JOINING, counter+1, len(urls))
 		}
-		client.ModifyMessage(ctx, effChatID, effMsg, updateMess)
+		client.ModifyMessage(ctx, effChatID, effMsg, updateMess, true)
 	}
 	if _, err := ctx.ArchiveChats(chanIDList); err != nil {
 		logrus.WithError(err).Error("failed to archive")
+		client.ModifyMessage(ctx, effChatID, effMsg, fmt.Sprintf(FAILED_ARCHIVE, err.Error()), true)
+	} else {
+		client.ModifyMessage(ctx, effChatID, effMsg, DONE_ARCHIVE, true)
 	}
-	client.ModifyMessage(ctx, effChatID, effMsg, "Done!")
+	client.ModifyMessage(ctx, effChatID, effMsg, DONE_ALL, true)
 	logrus.Info("all done!")
 	return nil
 }

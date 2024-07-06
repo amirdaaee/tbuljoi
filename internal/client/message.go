@@ -5,6 +5,7 @@ import (
 
 	"github.com/celestix/gotgproto/types"
 	"github.com/gotd/td/tg"
+	"github.com/sirupsen/logrus"
 )
 
 func GetMessageById(ctx *Context, id int) *tg.Message {
@@ -67,7 +68,10 @@ func GetInviteLinksFromContent(msg *tg.Message) []InviteLink {
 	return urls
 }
 
-func ModifyMessage(ctx *Context, chatID int64, msg *types.Message, newText string) {
+func ModifyMessage(ctx *Context, chatID int64, msg *types.Message, newText string, append bool) {
+	if append {
+		newText = GetMessageById(ctx, msg.ID).Message + "\n" + newText
+	}
 	chReq := tg.MessagesEditMessageRequest{
 		Flags:                msg.Flags,
 		InvertMedia:          msg.InvertMedia,
@@ -77,7 +81,9 @@ func ModifyMessage(ctx *Context, chatID int64, msg *types.Message, newText strin
 		Entities:             msg.Entities,
 		QuickReplyShortcutID: msg.QuickReplyShortcutID,
 	}
-	ctx.EditMessage(chatID, &chReq)
+	if _, err := ctx.EditMessage(chatID, &chReq); err != nil {
+		logrus.WithError(err).Error("error modify message")
+	}
 }
 func ForwardMessage(ctx *Context, FromChatID int64, ToChatID int64, msg *tg.Message) error {
 	fwReq := tg.MessagesForwardMessagesRequest{

@@ -21,7 +21,7 @@ func GetClient() (*gotgproto.Client, error) {
 	auth_convert := Conversator{}
 	device := telegram.DeviceConfig{}
 	device.SetDefaults()
-	device.DeviceModel = "tbuljoi"
+	device.DeviceModel = cfg.DeviceName
 	cl_opts := &gotgproto.ClientOpts{
 		DisableCopyright: true,
 		Session:          sessionMaker.SqlSession(sqlite.Open(cfg.SessionFile)),
