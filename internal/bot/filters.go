@@ -8,3 +8,6 @@ func filterReqJoin(m *types.Message) bool {
 func filterReqFwd(m *types.Message) bool {
 	return m.Text == "/f"
 }
+func filterReqFwdArch(m *types.Message) bool {
+	return m.Text == "/ff"
+}

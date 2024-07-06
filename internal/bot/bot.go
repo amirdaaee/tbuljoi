@@ -15,6 +15,7 @@ func StartBot() {
 	disp := cl.Dispatcher
 	disp.AddHandlerToGroup(handlers.NewMessage(filters.MessageFilter(filterReqJoin), joinManyChannel), 1)
 	disp.AddHandlerToGroup(handlers.NewMessage(filters.MessageFilter(filterReqFwd), forwToSelf), 1)
+	disp.AddHandlerToGroup(handlers.NewMessage(filters.MessageFilter(filterReqFwdArch), forwToArchive), 1)
 	logrus.Warn("Starting bot...")
 	cl.Idle()
 }

@@ -2,21 +2,23 @@ module github.com/amirdaaee/tbuljoi
 
 go 1.21.1
 
-require github.com/gotd/td v0.103.0
+require (
+	github.com/glebarez/sqlite v1.10.0
+	github.com/gotd/contrib v0.20.0
+	github.com/gotd/td v0.103.0
+	golang.org/x/time v0.5.0
+)
 
 require (
 	github.com/AnimeKaizoku/cacher v1.0.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/glebarez/go-sqlite v1.21.2 // indirect
-	github.com/glebarez/sqlite v1.10.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/gotd/contrib v0.20.0 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/mattn/go-isatty v0.0.17 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
-	golang.org/x/time v0.5.0 // indirect
 	gorm.io/gorm v1.25.7-0.20240204074919-46816ad31dde // indirect
 	modernc.org/libc v1.22.5 // indirect
 	modernc.org/mathutil v1.5.0 // indirect
@@ -28,7 +30,7 @@ require (
 	github.com/caarlos0/env/v11 v11.0.1
 	github.com/celestix/gotgproto v1.0.0-beta18
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
-	github.com/go-faster/errors v0.7.1 // indirect
+	github.com/go-faster/errors v0.7.1
 	github.com/go-faster/jx v1.1.0 // indirect
 	github.com/go-faster/xor v1.0.0 // indirect
 	github.com/gotd/ige v0.2.2 // indirect
