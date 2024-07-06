@@ -13,9 +13,9 @@ func StartBot() {
 		panic(err)
 	}
 	disp := cl.Dispatcher
-	disp.AddHandlerToGroup(handlers.NewMessage(filters.MessageFilter(filterReqJoin), joinManyChannel), 1)
-	disp.AddHandlerToGroup(handlers.NewMessage(filters.MessageFilter(filterReqFwd), forwToSelf), 1)
-	disp.AddHandlerToGroup(handlers.NewMessage(filters.MessageFilter(filterReqFwdArch), forwToArchive), 1)
+	disp.AddHandlerToGroup(handlers.NewMessage(filters.MessageFilter(filterReqJoin), tgHandle(joinHandler)), 1)
+	disp.AddHandlerToGroup(handlers.NewMessage(filters.MessageFilter(filterReqFwd), tgHandle(forwToSelfHandler)), 1)
+	disp.AddHandlerToGroup(handlers.NewMessage(filters.MessageFilter(filterReqFwdArch), tgHandle(forwToArchHandler)), 1)
 	logrus.Warn("Starting bot...")
 	cl.Idle()
 }

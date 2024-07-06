@@ -5,97 +5,94 @@ import (
 
 	"github.com/amirdaaee/tbuljoi/internal/client"
 	"github.com/amirdaaee/tbuljoi/internal/settings"
+	"github.com/celestix/gotgproto/dispatcher/handlers"
 	"github.com/celestix/gotgproto/ext"
+	"github.com/celestix/gotgproto/types"
+	"github.com/gotd/td/tg"
 	"github.com/sirupsen/logrus"
 )
 
-func forwToSelf(ctx_ *ext.Context, update *ext.Update) error {
-	effMsg := update.EffectiveMessage
-	effChat := update.EffectiveChat()
-	effChatID := effChat.GetID()
-	ctx := client.NewContext(ctx_, effMsg, &effChat)
-	// ....
-	l1 := logrus.WithField("chat id", effChatID)
-	replied := client.GetRepliedMsg(ctx, effMsg)
-	if replied == nil {
-		l1.Info("no replied message")
-		return nil
-	}
-	// ...
-	l1.Info("started forwarding to self")
-	client.ModifyMessage(ctx, effChatID, effMsg, fmt.Sprintf(START_FORWARDING, effChatID), false)
-	err := client.ForwardMessage(ctx, effChatID, effChatID, replied)
-	if err != nil {
-		client.ModifyMessage(ctx, effChatID, effMsg, fmt.Sprintf(FAILED_FORWARDING, effChatID, err), true)
-	} else {
-		client.ModifyMessage(ctx, effChatID, effMsg, fmt.Sprintf(DONE_FORWARDING, effChatID), true)
-	}
-	client.ModifyMessage(ctx, effChatID, effMsg, DONE_ALL, true)
-	return err
+type handlerType struct {
+	name  string
+	runFN func(hCtx *handleCtx, l_ *logrus.Entry, cl_ *ClientLogger) error
 }
-func forwToArchive(ctx_ *ext.Context, update *ext.Update) error {
-	effMsg := update.EffectiveMessage
-	effChat := update.EffectiveChat()
-	effChatID := effChat.GetID()
-	ctx := client.NewContext(ctx_, effMsg, &effChat)
-	// ....
-	l1 := logrus.WithField("chat id", effChatID)
-	replied := client.GetRepliedMsg(ctx, effMsg)
-	if replied == nil {
-		l1.Info("no replied message")
-		return nil
-	}
-	archChatID := settings.Config().ArchiveChatID
-	// ...
-	l1.Info("started forwarding to archive")
-	client.ModifyMessage(ctx, effChatID, effMsg, fmt.Sprintf(START_FORWARDING, archChatID), false)
-	err := client.ForwardMessage(ctx, effChatID, archChatID, replied)
-	if err != nil {
-		client.ModifyMessage(ctx, effChatID, effMsg, fmt.Sprintf(FAILED_FORWARDING, archChatID, err), true)
-	} else {
-		client.ModifyMessage(ctx, effChatID, effMsg, fmt.Sprintf(DONE_FORWARDING, archChatID), true)
-	}
-	client.ModifyMessage(ctx, effChatID, effMsg, DONE_ALL, true)
-	return err
+type handleCtx struct {
+	effMsg    *types.Message
+	orgMsg    *tg.Message
+	effChat   types.EffectiveChat
+	effChatID int64
+	clCtx     *client.Context
+	ctx       *ext.Context
 }
-func joinManyChannel(ctx_ *ext.Context, update *ext.Update) error {
-	effMsg := update.EffectiveMessage
-	effChat := update.EffectiveChat()
-	effChatID := effChat.GetID()
-	ctx := client.NewContext(ctx_, effMsg, &effChat)
-	// ....
-	l1 := logrus.WithField("chat id", effChatID)
-	replied := client.GetRepliedMsg(ctx, effMsg)
-	if replied == nil {
-		l1.Info("no replied message")
-		return nil
-	}
-	// ...
-	urls := client.GetInviteLinks(replied)
-	// ...
-	var updateMess string
-	var chanIDList []int64
-	l1.WithField("urls", urls).Info("start")
-	client.ModifyMessage(ctx, effChatID, effMsg, fmt.Sprintf(START_JOINING, len(urls)), false)
-	for counter, u := range urls {
-		ll := l1.WithField("url", u)
-		ll.Info("starting")
-		if chanID, err := client.JoinChannel(ctx, u); err != nil {
-			ll.Error(err)
-			updateMess = fmt.Sprintf(FAILED_JOIN, counter+1, len(urls), err.Error())
-		} else {
-			chanIDList = append(chanIDList, chanID)
-			updateMess = fmt.Sprintf(DONE_JOINING, counter+1, len(urls))
+
+func (hCtx *handleCtx) fill(ctx_ *ext.Context, update *ext.Update) {
+	hCtx.effMsg = update.EffectiveMessage
+	hCtx.effChat = update.EffectiveChat()
+	hCtx.effChatID = hCtx.effChat.GetID()
+	hCtx.clCtx = client.NewContext(ctx_, hCtx.effMsg, &hCtx.effChat)
+	hCtx.ctx = ctx_
+	hCtx.orgMsg = client.GetRepliedMsg(hCtx.clCtx, hCtx.effMsg)
+}
+func tgHandle(handler handlerType) handlers.CallbackResponse {
+	return func(ctx_ *ext.Context, update *ext.Update) error {
+		hCtx := handleCtx{}
+		hCtx.fill(ctx_, update)
+		l_ := logrus.WithField("handler", handler.name).WithField("chat_id", hCtx.effChatID)
+		clientLogger := ClientLogger{
+			ctx:  &hCtx,
+			pref: handler.name,
 		}
-		client.ModifyMessage(ctx, effChatID, effMsg, updateMess, true)
+		// ....
+		if hCtx.orgMsg == nil {
+			clientLogger.log(l_.Warn, "no replied message", false)
+			return nil
+		}
+		// ...
+		clientLogger.log(l_.Info, "Start", false)
+		err := handler.runFN(&hCtx, l_, &clientLogger)
+		if err != nil {
+			clientLogger.log(l_.Error, fmt.Sprintf("Error (%s)", err.Error()), true)
+		} else {
+			clientLogger.log(l_.Info, "Done", true)
+		}
+		return err
 	}
-	if _, err := ctx.ArchiveChats(chanIDList); err != nil {
-		l1.WithError(err).Error("failed to archive")
-		client.ModifyMessage(ctx, effChatID, effMsg, fmt.Sprintf(FAILED_ARCHIVE, err.Error()), true)
-	} else {
-		client.ModifyMessage(ctx, effChatID, effMsg, DONE_ARCHIVE, true)
-	}
-	client.ModifyMessage(ctx, effChatID, effMsg, DONE_ALL, true)
-	l1.Info("all done!")
-	return nil
+}
+
+var forwToSelfHandler = handlerType{
+	name: "forw-to-self",
+	runFN: func(hCtx *handleCtx, l_ *logrus.Entry, cl_ *ClientLogger) error {
+		return client.ForwardMessage(hCtx.clCtx, hCtx.effChatID, hCtx.effChatID, hCtx.orgMsg)
+	},
+}
+
+var forwToArchHandler = handlerType{
+	name: "forw-to-arch",
+	runFN: func(hCtx *handleCtx, l_ *logrus.Entry, cl_ *ClientLogger) error {
+		return client.ForwardMessage(hCtx.clCtx, hCtx.effChatID, settings.Config().ArchiveChatID, hCtx.orgMsg)
+	},
+}
+
+var joinHandler = handlerType{
+	name: "join",
+	runFN: func(hCtx *handleCtx, l_ *logrus.Entry, cl_ *ClientLogger) error {
+		urls := client.GetInviteLinks(hCtx.orgMsg)
+		var chanIDList []int64
+		cl_.log(l_.Info, fmt.Sprintf("total %d", len(urls)), true)
+		for counter, u := range urls {
+			if chanID, err := client.JoinChannel(hCtx.clCtx, u); err != nil {
+				cl_.log(l_.Error, fmt.Sprintf("%d/%d Join Error (%s)", counter+1, len(urls), err.Error()), true)
+			} else {
+				chanIDList = append(chanIDList, chanID)
+				cl_.log(l_.Info, fmt.Sprintf("%d/%d Join Done", counter+1, len(urls)), true)
+			}
+		}
+
+		if _, err := hCtx.clCtx.ArchiveChats(chanIDList); err != nil {
+			cl_.log(l_.Error, fmt.Sprintf("Archive Error (%s)", err.Error()), true)
+		} else {
+			cl_.log(l_.Info, "Archive Done", true)
+		}
+		return nil
+	},
 }
