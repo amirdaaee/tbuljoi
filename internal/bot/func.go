@@ -25,7 +25,7 @@ type handleCtx struct {
 	clCtx      *client.Context
 	ctx        *ext.Context
 	db         *db.Mongo
-	channelsDB *db.ChannelsCollection
+	channelsDB *db.ChatsCollection
 }
 
 func (hCtx *handleCtx) fill(ctx_ *ext.Context, update *ext.Update) {
@@ -39,7 +39,7 @@ func (hCtx *handleCtx) fill(ctx_ *ext.Context, update *ext.Update) {
 		DBUri:  settings.Config().MongoURI,
 		DBName: settings.Config().MongoDB,
 	}
-	hCtx.channelsDB = &db.ChannelsCollection{
+	hCtx.channelsDB = &db.ChatsCollection{
 		Mongo:          hCtx.db,
 		CollectionName: "channels",
 	}
@@ -115,7 +115,7 @@ var joinHandler = handlerType{
 			cl_.log(l_.Error, fmt.Sprintf("error db connection: %s", err), true)
 		} else {
 			defer mongoCl.Disconnect(hCtx.ctx)
-			if err := hCtx.channelsDB.DepChannAppend(hCtx.ctx, mongoCl, hCtx.effChatID, chanIDList); err != nil {
+			if err := hCtx.channelsDB.DepChatAppend(hCtx.ctx, mongoCl, hCtx.effChatID, chanIDList); err != nil {
 				cl_.log(l_.Error, fmt.Sprintf("error appending channels to db: %s", err), true)
 			}
 		}
@@ -131,21 +131,51 @@ var unjoinHandler = handlerType{
 			return nil
 		}
 		defer mongoCl.Disconnect(hCtx.ctx)
-		channDoc := new(db.ChannelsDoc)
-		if err := hCtx.channelsDB.GetByChannID(hCtx.ctx, mongoCl, channDoc, hCtx.effChatID); err != nil {
+		channDoc := new(db.ChatsDoc)
+		if err := hCtx.channelsDB.GetByChatID(hCtx.ctx, mongoCl, channDoc, hCtx.effChatID); err != nil {
 			cl_.log(l_.Error, fmt.Sprintf("error getting channel from db: %s", err), false)
 			return nil
 		}
-		total := len(channDoc.DepChannID)
+		total := len(channDoc.DepChatID)
 		cl_.log(l_.Info, fmt.Sprintf("total %d", total), false)
-		for counter, u := range channDoc.DepChannID {
+		for counter, u := range channDoc.DepChatID {
 			if err := client.LeaveChannelById(hCtx.clCtx, u); err != nil {
 				cl_.log(l_.Error, fmt.Sprintf("%d/%d Leave Error (%s)", counter+1, total, err.Error()), true)
 			} else {
 				cl_.log(l_.Info, fmt.Sprintf("%d/%d Leave Done", counter+1, total), true)
 			}
 		}
-		if err := hCtx.channelsDB.DepChannFlush(hCtx.ctx, mongoCl, hCtx.effChatID); err != nil {
+		if err := hCtx.channelsDB.DepChatFlush(hCtx.ctx, mongoCl, hCtx.effChatID); err != nil {
+			cl_.log(l_.Error, fmt.Sprintf("Flush dep channels from db: %s", err), true)
+		}
+		return nil
+	},
+}
+var enableAutoForword = handlerType{
+	name: "autoforward-enable",
+	runFN: func(hCtx *handleCtx, l_ *logrus.Entry, cl_ *ClientLogger) error {
+		mongoCl, err := hCtx.db.GetClient()
+		if err != nil {
+			cl_.log(l_.Error, fmt.Sprintf("error db connection: %s", err), false)
+			return nil
+		}
+		defer mongoCl.Disconnect(hCtx.ctx)
+		channDoc := new(db.ChatsDoc)
+
+		if err := hCtx.channelsDB.GetByChatID(hCtx.ctx, mongoCl, channDoc, hCtx.effChatID); err != nil {
+			cl_.log(l_.Error, fmt.Sprintf("error getting channel from db: %s", err), false)
+			return nil
+		}
+		total := len(channDoc.DepChatID)
+		cl_.log(l_.Info, fmt.Sprintf("total %d", total), false)
+		for counter, u := range channDoc.DepChatID {
+			if err := client.LeaveChannelById(hCtx.clCtx, u); err != nil {
+				cl_.log(l_.Error, fmt.Sprintf("%d/%d Leave Error (%s)", counter+1, total, err.Error()), true)
+			} else {
+				cl_.log(l_.Info, fmt.Sprintf("%d/%d Leave Done", counter+1, total), true)
+			}
+		}
+		if err := hCtx.channelsDB.DepChatFlush(hCtx.ctx, mongoCl, hCtx.effChatID); err != nil {
 			cl_.log(l_.Error, fmt.Sprintf("Flush dep channels from db: %s", err), true)
 		}
 		return nil
