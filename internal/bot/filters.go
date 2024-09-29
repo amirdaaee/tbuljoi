@@ -17,6 +17,9 @@ func isFromSelf(m *types.Message) bool {
 	return m.Out
 }
 func isAF(m *types.Message) bool {
+	if m.Media == nil {
+		return false
+	}
 	afCache := GetAFCache()
 	peerIDCls := m.PeerID
 	var peerID int64

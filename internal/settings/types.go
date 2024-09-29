@@ -12,5 +12,5 @@ type configType struct {
 	MongoURI      string `env:"MONGO_URI,required"`
 	MongoDB       string `env:"MONGO_DB,required"`
 	AFBurst       int    `env:"AF_BURST" envDefault:"2"`
-	AFRelax       int    `env:"AF_RELAX" envDefault:"10"`
+	AFRelax       int    `env:"AF_RELAX" envDefault:"5"`
 }
