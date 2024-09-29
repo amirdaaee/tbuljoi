@@ -9,4 +9,6 @@ type configType struct {
 	LogLevel      string `env:"LOG_LEVEL" envDefault:"WARNING"`
 	MaxFloodWait  int    `env:"MAX_FLOOD_WAIT" envDefault:"30"`
 	DeviceName    string `env:"DEVICE_NAME" envDefault:"tbuljoi"`
+	MongoURI      string `env:"MONGO_URI,required"`
+	MongoDB       string `env:"MONGO_DB,required"`
 }

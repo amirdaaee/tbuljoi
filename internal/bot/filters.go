@@ -5,6 +5,9 @@ import "github.com/celestix/gotgproto/types"
 func filterReqJoin(m *types.Message) bool {
 	return m.Text == "/j"
 }
+func filterReqUnjoin(m *types.Message) bool {
+	return m.Text == "/uj"
+}
 func filterReqFwd(m *types.Message) bool {
 	return m.Text == "/f"
 }

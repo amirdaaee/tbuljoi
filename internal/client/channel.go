@@ -2,13 +2,20 @@ package client
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 
+	"github.com/celestix/gotgproto/types"
 	"github.com/gotd/td/tg"
 	"github.com/gotd/td/tgerr"
 )
 
-func GetChanellInfoFromLink(ctx *Context, link InviteLink) (tg.ChatInviteClass, error) {
+func GetChanellInfoFromDeepLink(ctx *Context, link InviteLink) (tg.ChatInviteClass, error) {
 	return ctx.Raw.MessagesCheckChatInvite(ctx, link.GetJoinHash())
+}
+func GetChanellInfoFromResolveLink(ctx *Context, link InviteLink) (types.EffectiveChat, error) {
+	split := strings.Split(string(link), "/")
+	return ctx.ResolveUsername(split[len(split)-1])
 }
 
 func JoinChannelByLink(ctx *Context, link InviteLink) (int64, error) {
@@ -27,6 +34,20 @@ func JoinChannelById(ctx *Context, id int64, hash int64, ignore ...string) (int6
 		}
 	}
 	return getChanIdFromUpdates(updateCls), nil
+}
+func LeaveChannelById(ctx *Context, id int64, ignore ...string) error {
+	chatCls := ctx.PeerStorage.GetInputPeerById(id)
+	chat, ok := chatCls.(*tg.InputPeerChannel)
+	if !ok {
+		return fmt.Errorf("chat is not channel: %T", chatCls)
+	}
+	_, err := ctx.Raw.ChannelsLeaveChannel(ctx, &tg.InputChannel{ChannelID: chat.ChannelID, AccessHash: chat.AccessHash})
+	if err != nil {
+		if !tgerr.Is(err, ignore...) {
+			return err
+		}
+	}
+	return nil
 }
 
 func GetChatID(chat tg.ChatClass) (int64, int64, error) {

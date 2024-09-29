@@ -28,6 +28,15 @@ func (i *InviteLink) IsJoinDeeplink() bool {
 	}
 	return false
 }
+func (i *InviteLink) IsResolvelink() bool {
+	if i.IsDeepink() {
+		_, err := deeplink.Expect(string(*i), deeplink.Resolve)
+		if err == nil {
+			return true
+		}
+	}
+	return false
+}
 
 func (i *InviteLink) GetJoinHash() string {
 	l, err := deeplink.Expect(string(*i), deeplink.Join)

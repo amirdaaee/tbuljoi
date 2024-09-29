@@ -2,6 +2,7 @@ package client
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/amirdaaee/tbuljoi/internal/settings"
@@ -41,13 +42,13 @@ func GetClient() (*gotgproto.Client, error) {
 	return client, nil
 }
 
-func JoinChannel(ctx *Context, link InviteLink) (int64, error) {
+func JoinChannelByDeepLink(ctx *Context, link InviteLink) (int64, error) {
 	chanID := int64(-1)
 	if !link.IsJoinDeeplink() {
-		return chanID, errors.New("not a valid link")
+		return chanID, fmt.Errorf("not a valid deep link (%s)", link)
 	}
 	logger := logrus.WithField("url", string(link))
-	chan_info_cls, err := GetChanellInfoFromLink(ctx, link)
+	chan_info_cls, err := GetChanellInfoFromDeepLink(ctx, link)
 	if err != nil {
 		return chanID, err
 	}
@@ -77,6 +78,25 @@ func JoinChannel(ctx *Context, link InviteLink) (int64, error) {
 		}
 	default:
 		return chanID, errors.New("chan_info_cls not recognized")
+	}
+	logger.Infof("joined. id=%d", chanID)
+	return chanID, err
+
+}
+func JoinChannelByResolveLink(ctx *Context, link InviteLink) (int64, error) {
+	chanID := int64(-1)
+	if !link.IsResolvelink() {
+		return chanID, fmt.Errorf("not a valid resolve link (%s)", link)
+	}
+	logger := logrus.WithField("url", string(link))
+	chan_info_cls, err := GetChanellInfoFromResolveLink(ctx, link)
+	if err != nil {
+		return chanID, err
+	}
+	id := chan_info_cls.GetID()
+	hash := chan_info_cls.GetAccessHash()
+	if chanID, err = JoinChannelById(ctx, id, hash); err != nil {
+		return chanID, err
 	}
 	logger.Infof("joined. id=%d", chanID)
 	return chanID, err

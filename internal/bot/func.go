@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/amirdaaee/tbuljoi/internal/client"
+	"github.com/amirdaaee/tbuljoi/internal/db"
 	"github.com/amirdaaee/tbuljoi/internal/settings"
 	"github.com/celestix/gotgproto/dispatcher/handlers"
 	"github.com/celestix/gotgproto/ext"
@@ -17,12 +18,14 @@ type handlerType struct {
 	runFN func(hCtx *handleCtx, l_ *logrus.Entry, cl_ *ClientLogger) error
 }
 type handleCtx struct {
-	effMsg    *types.Message
-	orgMsg    *tg.Message
-	effChat   types.EffectiveChat
-	effChatID int64
-	clCtx     *client.Context
-	ctx       *ext.Context
+	effMsg     *types.Message
+	orgMsg     *tg.Message
+	effChat    types.EffectiveChat
+	effChatID  int64
+	clCtx      *client.Context
+	ctx        *ext.Context
+	db         *db.Mongo
+	channelsDB *db.ChannelsCollection
 }
 
 func (hCtx *handleCtx) fill(ctx_ *ext.Context, update *ext.Update) {
@@ -32,8 +35,16 @@ func (hCtx *handleCtx) fill(ctx_ *ext.Context, update *ext.Update) {
 	hCtx.clCtx = client.NewContext(ctx_, hCtx.effMsg, &hCtx.effChat)
 	hCtx.ctx = ctx_
 	hCtx.orgMsg = client.GetRepliedMsg(hCtx.clCtx, hCtx.effMsg)
+	hCtx.db = &db.Mongo{
+		DBUri:  settings.Config().MongoURI,
+		DBName: settings.Config().MongoDB,
+	}
+	hCtx.channelsDB = &db.ChannelsCollection{
+		Mongo:          hCtx.db,
+		CollectionName: "channels",
+	}
 }
-func tgHandle(handler handlerType) handlers.CallbackResponse {
+func tgHandle(handler handlerType, forceReplied bool) handlers.CallbackResponse {
 	return func(ctx_ *ext.Context, update *ext.Update) error {
 		hCtx := handleCtx{}
 		hCtx.fill(ctx_, update)
@@ -43,7 +54,7 @@ func tgHandle(handler handlerType) handlers.CallbackResponse {
 			pref: handler.name,
 		}
 		// ....
-		if hCtx.orgMsg == nil {
+		if forceReplied && hCtx.orgMsg == nil {
 			clientLogger.log(l_.Warn, "no replied message", false)
 			return nil
 		}
@@ -80,18 +91,62 @@ var joinHandler = handlerType{
 		var chanIDList []int64
 		cl_.log(l_.Info, fmt.Sprintf("total %d", len(urls)), true)
 		for counter, u := range urls {
-			if chanID, err := client.JoinChannel(hCtx.clCtx, u); err != nil {
+			var err error
+			var chanID int64
+			if u.IsJoinDeeplink() {
+				chanID, err = client.JoinChannelByDeepLink(hCtx.clCtx, u)
+			} else if u.IsResolvelink() {
+				chanID, err = client.JoinChannelByResolveLink(hCtx.clCtx, u)
+			}
+			if err != nil {
 				cl_.log(l_.Error, fmt.Sprintf("%d/%d Join Error (%s)", counter+1, len(urls), err.Error()), true)
 			} else {
 				chanIDList = append(chanIDList, chanID)
 				cl_.log(l_.Info, fmt.Sprintf("%d/%d Join Done", counter+1, len(urls)), true)
 			}
 		}
-
 		if _, err := hCtx.clCtx.ArchiveChats(chanIDList); err != nil {
 			cl_.log(l_.Error, fmt.Sprintf("Archive Error (%s)", err.Error()), true)
 		} else {
 			cl_.log(l_.Info, "Archive Done", true)
+		}
+		mongoCl, err := hCtx.db.GetClient()
+		if err != nil {
+			cl_.log(l_.Error, fmt.Sprintf("error db connection: %s", err), true)
+		} else {
+			defer mongoCl.Disconnect(hCtx.ctx)
+			if err := hCtx.channelsDB.DepChannAppend(hCtx.ctx, mongoCl, hCtx.effChatID, chanIDList); err != nil {
+				cl_.log(l_.Error, fmt.Sprintf("error appending channels to db: %s", err), true)
+			}
+		}
+		return nil
+	},
+}
+var unjoinHandler = handlerType{
+	name: "unjoin",
+	runFN: func(hCtx *handleCtx, l_ *logrus.Entry, cl_ *ClientLogger) error {
+		mongoCl, err := hCtx.db.GetClient()
+		if err != nil {
+			cl_.log(l_.Error, fmt.Sprintf("error db connection: %s", err), false)
+			return nil
+		}
+		defer mongoCl.Disconnect(hCtx.ctx)
+		channDoc := new(db.ChannelsDoc)
+		if err := hCtx.channelsDB.GetByChannID(hCtx.ctx, mongoCl, channDoc, hCtx.effChatID); err != nil {
+			cl_.log(l_.Error, fmt.Sprintf("error getting channel from db: %s", err), false)
+			return nil
+		}
+		total := len(channDoc.DepChannID)
+		cl_.log(l_.Info, fmt.Sprintf("total %d", total), false)
+		for counter, u := range channDoc.DepChannID {
+			if err := client.LeaveChannelById(hCtx.clCtx, u); err != nil {
+				cl_.log(l_.Error, fmt.Sprintf("%d/%d Leave Error (%s)", counter+1, total, err.Error()), true)
+			} else {
+				cl_.log(l_.Info, fmt.Sprintf("%d/%d Leave Done", counter+1, total), true)
+			}
+		}
+		if err := hCtx.channelsDB.DepChannFlush(hCtx.ctx, mongoCl, hCtx.effChatID); err != nil {
+			cl_.log(l_.Error, fmt.Sprintf("Flush dep channels from db: %s", err), true)
 		}
 		return nil
 	},
