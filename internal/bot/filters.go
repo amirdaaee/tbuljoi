@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/amirdaaee/tbuljoi/internal/db"
 	"github.com/amirdaaee/tbuljoi/internal/settings"
@@ -86,17 +85,18 @@ func isAFRelaxed(m *types.Message) bool {
 	}
 	peerIDStr := fmt.Sprintf("%d", peerID)
 	ll := logrus.WithField("peer-id", peerID)
+	msgTime := m.Date
 	valCache, found := afCache.Get(peerIDStr)
 	if found {
-		val := valCache.(time.Time)
-		dur := time.Since(val)
+		first := valCache.(int)
+		dur := msgTime - first
 		if dur > settings.Config().AFBurst {
 			ll.Debug("relaxing ...")
 			return true
 		}
 		return false
 	} else {
-		afCache.Set(peerIDStr, time.Now(), 0)
+		afCache.Set(peerIDStr, msgTime, 0)
 		return false
 	}
 }

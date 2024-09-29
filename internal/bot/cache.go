@@ -21,7 +21,7 @@ func GetAFCache() *cache.Cache {
 }
 func GetAFRelaxCache() *cache.Cache {
 	aFRelaxCacheOnce.Do(func() {
-		_afRelaxCache = cache.New(settings.Config().AFRelax, 1*time.Second)
+		_afRelaxCache = cache.New(time.Duration(settings.Config().AFRelax)*time.Second, 1*time.Second)
 	})
 	return _afRelaxCache
 }
