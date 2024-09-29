@@ -2,6 +2,7 @@ package bot
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/amirdaaee/tbuljoi/internal/client"
 	"github.com/amirdaaee/tbuljoi/internal/db"
@@ -131,14 +132,14 @@ var unjoinHandler = handlerType{
 			return nil
 		}
 		defer mongoCl.Disconnect(hCtx.ctx)
-		channDoc := new(db.ChatsDoc)
-		if err := hCtx.channelsDB.GetByChatID(hCtx.ctx, mongoCl, channDoc, hCtx.effChatID); err != nil {
+		chatDoc := new(db.ChatsDoc)
+		if err := hCtx.channelsDB.GetByChatID(hCtx.ctx, mongoCl, chatDoc, hCtx.effChatID); err != nil {
 			cl_.log(l_.Error, fmt.Sprintf("error getting channel from db: %s", err), false)
 			return nil
 		}
-		total := len(channDoc.DepChatID)
+		total := len(chatDoc.DepChatID)
 		cl_.log(l_.Info, fmt.Sprintf("total %d", total), false)
-		for counter, u := range channDoc.DepChatID {
+		for counter, u := range chatDoc.DepChatID {
 			if err := client.LeaveChannelById(hCtx.clCtx, u); err != nil {
 				cl_.log(l_.Error, fmt.Sprintf("%d/%d Leave Error (%s)", counter+1, total, err.Error()), true)
 			} else {
@@ -151,33 +152,32 @@ var unjoinHandler = handlerType{
 		return nil
 	},
 }
-var enableAutoForword = handlerType{
-	name: "autoforward-enable",
+var setAutoForword = handlerType{
+	name: "autoforward",
 	runFN: func(hCtx *handleCtx, l_ *logrus.Entry, cl_ *ClientLogger) error {
+		stateStr := strings.TrimPrefix(hCtx.effMsg.Message.Message, "/af ")
+		var state bool
+		switch stateStr {
+		case "t":
+			state = true
+		case "f":
+			state = false
+		default:
+			cl_.log(l_.Error, fmt.Sprintf("requred state (%s) not understood", stateStr), true)
+			return nil
+		}
 		mongoCl, err := hCtx.db.GetClient()
 		if err != nil {
-			cl_.log(l_.Error, fmt.Sprintf("error db connection: %s", err), false)
+			cl_.log(l_.Error, fmt.Sprintf("error db connection: %s", err), true)
 			return nil
 		}
 		defer mongoCl.Disconnect(hCtx.ctx)
-		channDoc := new(db.ChatsDoc)
 
-		if err := hCtx.channelsDB.GetByChatID(hCtx.ctx, mongoCl, channDoc, hCtx.effChatID); err != nil {
-			cl_.log(l_.Error, fmt.Sprintf("error getting channel from db: %s", err), false)
+		if err := hCtx.channelsDB.AutoForwardChange(hCtx.ctx, mongoCl, hCtx.effChatID, state); err != nil {
+			cl_.log(l_.Error, fmt.Sprintf("error modifing chat doc in db: %s", err), true)
 			return nil
 		}
-		total := len(channDoc.DepChatID)
-		cl_.log(l_.Info, fmt.Sprintf("total %d", total), false)
-		for counter, u := range channDoc.DepChatID {
-			if err := client.LeaveChannelById(hCtx.clCtx, u); err != nil {
-				cl_.log(l_.Error, fmt.Sprintf("%d/%d Leave Error (%s)", counter+1, total, err.Error()), true)
-			} else {
-				cl_.log(l_.Info, fmt.Sprintf("%d/%d Leave Done", counter+1, total), true)
-			}
-		}
-		if err := hCtx.channelsDB.DepChatFlush(hCtx.ctx, mongoCl, hCtx.effChatID); err != nil {
-			cl_.log(l_.Error, fmt.Sprintf("Flush dep channels from db: %s", err), true)
-		}
+		cl_.log(l_.Info, fmt.Sprintf("af set to: %t", state), true)
 		return nil
 	},
 }
