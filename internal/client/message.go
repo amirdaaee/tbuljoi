@@ -51,6 +51,8 @@ func GetInviteLinksFromMarkup(msg *tg.Message) []InviteLink {
 			iv := InviteLink(u)
 			if iv.IsJoinDeeplink() {
 				urls = append(urls, InviteLink(u))
+			} else {
+				logrus.WithField("url", u).Warn("not a deep link")
 			}
 		}
 	}
@@ -63,6 +65,8 @@ func GetInviteLinksFromContent(msg *tg.Message) []InviteLink {
 		iv := InviteLink(u)
 		if iv.IsJoinDeeplink() {
 			urls = append(urls, iv)
+		} else {
+			logrus.WithField("url", u).Warn("not a deep link")
 		}
 	}
 	return urls
