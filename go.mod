@@ -46,6 +46,7 @@ require (
 	github.com/gotd/neo v0.1.5 // indirect
 	github.com/joho/godotenv v1.5.1
 	github.com/klauspost/compress v1.17.8 // indirect
+	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/segmentio/asm v1.2.0 // indirect
 	github.com/sirupsen/logrus v1.9.3
 	go.opentelemetry.io/otel v1.27.0 // indirect

@@ -19,14 +19,19 @@ func GetMessageById(ctx *Context, id int) *tg.Message {
 	}
 	messages := messages_cls.(*tg.MessagesMessages)
 	message_cls := messages.Messages[0]
-	message := message_cls.(*tg.Message)
-	return message
+	message, ok := message_cls.(*tg.Message)
+	if ok {
+		return message
+	} else {
+		return nil
+	}
 }
 
 func GetRepliedMsg(ctx *Context, msg *types.Message) *tg.Message {
 	if val_cls, ok := msg.GetReplyTo(); ok {
-		val := val_cls.(*tg.MessageReplyHeader)
-		return GetMessageById(ctx, val.ReplyToMsgID)
+		if val, ok := val_cls.(*tg.MessageReplyHeader); ok {
+			return GetMessageById(ctx, val.ReplyToMsgID)
+		}
 	}
 	return nil
 }

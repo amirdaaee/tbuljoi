@@ -18,6 +18,7 @@ func StartBot() {
 	disp.AddHandlerToGroup(handlers.NewMessage(filters.MessageFilter(filterReqFwd), tgHandle(forwToSelfHandler, true)), 1)
 	disp.AddHandlerToGroup(handlers.NewMessage(filters.MessageFilter(filterReqFwdArch), tgHandle(forwToArchHandler, true)), 1)
 	disp.AddHandlerToGroup(handlers.NewMessage(filters.MessageFilter(filterReqAFSet), tgHandle(setAutoForword, false)), 1)
+	disp.AddHandlerToGroup(handlers.NewMessage(filters.MessageFilter(filterAF), tgHandle(autoForword, false)), 1)
 	logrus.Warn("Starting bot...")
 	cl.Idle()
 }

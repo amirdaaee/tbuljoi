@@ -19,16 +19,28 @@ type handlerType struct {
 	runFN func(hCtx *handleCtx, l_ *logrus.Entry, cl_ *ClientLogger) error
 }
 type handleCtx struct {
-	effMsg     *types.Message
-	orgMsg     *tg.Message
-	effChat    types.EffectiveChat
-	effChatID  int64
-	clCtx      *client.Context
-	ctx        *ext.Context
-	db         *db.Mongo
-	channelsDB *db.ChatsCollection
+	effMsg            *types.Message
+	orgMsg            *tg.Message
+	effChat           types.EffectiveChat
+	effChatID         int64
+	clCtx             *client.Context
+	ctx               *ext.Context
+	db                *db.Mongo
+	chatsDBCollection *db.ChatsCollection
 }
 
+func getDB() *db.Mongo {
+	return &db.Mongo{
+		DBUri:  settings.Config().MongoURI,
+		DBName: settings.Config().MongoDB,
+	}
+}
+func getChatsDBCollection(_db *db.Mongo) *db.ChatsCollection {
+	return &db.ChatsCollection{
+		Mongo:          _db,
+		CollectionName: "channels",
+	}
+}
 func (hCtx *handleCtx) fill(ctx_ *ext.Context, update *ext.Update) {
 	hCtx.effMsg = update.EffectiveMessage
 	hCtx.effChat = update.EffectiveChat()
@@ -36,14 +48,8 @@ func (hCtx *handleCtx) fill(ctx_ *ext.Context, update *ext.Update) {
 	hCtx.clCtx = client.NewContext(ctx_, hCtx.effMsg, &hCtx.effChat)
 	hCtx.ctx = ctx_
 	hCtx.orgMsg = client.GetRepliedMsg(hCtx.clCtx, hCtx.effMsg)
-	hCtx.db = &db.Mongo{
-		DBUri:  settings.Config().MongoURI,
-		DBName: settings.Config().MongoDB,
-	}
-	hCtx.channelsDB = &db.ChatsCollection{
-		Mongo:          hCtx.db,
-		CollectionName: "channels",
-	}
+	hCtx.db = getDB()
+	hCtx.chatsDBCollection = getChatsDBCollection(hCtx.db)
 }
 func tgHandle(handler handlerType, forceReplied bool) handlers.CallbackResponse {
 	return func(ctx_ *ext.Context, update *ext.Update) error {
@@ -51,8 +57,9 @@ func tgHandle(handler handlerType, forceReplied bool) handlers.CallbackResponse 
 		hCtx.fill(ctx_, update)
 		l_ := logrus.WithField("handler", handler.name).WithField("chat_id", hCtx.effChatID)
 		clientLogger := ClientLogger{
-			ctx:  &hCtx,
-			pref: handler.name,
+			ctx:       &hCtx,
+			pref:      handler.name,
+			modifyMsg: hCtx.effMsg.Out,
 		}
 		// ....
 		if forceReplied && hCtx.orgMsg == nil {
@@ -116,7 +123,7 @@ var joinHandler = handlerType{
 			cl_.log(l_.Error, fmt.Sprintf("error db connection: %s", err), true)
 		} else {
 			defer mongoCl.Disconnect(hCtx.ctx)
-			if err := hCtx.channelsDB.DepChatAppend(hCtx.ctx, mongoCl, hCtx.effChatID, chanIDList); err != nil {
+			if err := hCtx.chatsDBCollection.DepChatAppend(hCtx.ctx, mongoCl, hCtx.effChatID, chanIDList); err != nil {
 				cl_.log(l_.Error, fmt.Sprintf("error appending channels to db: %s", err), true)
 			}
 		}
@@ -133,7 +140,7 @@ var unjoinHandler = handlerType{
 		}
 		defer mongoCl.Disconnect(hCtx.ctx)
 		chatDoc := new(db.ChatsDoc)
-		if err := hCtx.channelsDB.GetByChatID(hCtx.ctx, mongoCl, chatDoc, hCtx.effChatID); err != nil {
+		if err := hCtx.chatsDBCollection.GetByChatID(hCtx.ctx, mongoCl, chatDoc, hCtx.effChatID); err != nil {
 			cl_.log(l_.Error, fmt.Sprintf("error getting channel from db: %s", err), false)
 			return nil
 		}
@@ -146,7 +153,7 @@ var unjoinHandler = handlerType{
 				cl_.log(l_.Info, fmt.Sprintf("%d/%d Leave Done", counter+1, total), true)
 			}
 		}
-		if err := hCtx.channelsDB.DepChatFlush(hCtx.ctx, mongoCl, hCtx.effChatID); err != nil {
+		if err := hCtx.chatsDBCollection.DepChatFlush(hCtx.ctx, mongoCl, hCtx.effChatID); err != nil {
 			cl_.log(l_.Error, fmt.Sprintf("Flush dep channels from db: %s", err), true)
 		}
 		return nil
@@ -173,11 +180,22 @@ var setAutoForword = handlerType{
 		}
 		defer mongoCl.Disconnect(hCtx.ctx)
 
-		if err := hCtx.channelsDB.AutoForwardChange(hCtx.ctx, mongoCl, hCtx.effChatID, state); err != nil {
+		if err := hCtx.chatsDBCollection.AutoForwardChange(hCtx.ctx, mongoCl, hCtx.effChatID, state); err != nil {
 			cl_.log(l_.Error, fmt.Sprintf("error modifing chat doc in db: %s", err), true)
 			return nil
 		}
+		afCache := GetAFCache()
+		afCache.Set(fmt.Sprintf("%d", hCtx.effChatID), state, 0)
 		cl_.log(l_.Info, fmt.Sprintf("af set to: %t", state), true)
+		return nil
+	},
+}
+var autoForword = handlerType{
+	name: "autoforward",
+	runFN: func(hCtx *handleCtx, l_ *logrus.Entry, cl_ *ClientLogger) error {
+		if err := client.ForwardMessage(hCtx.clCtx, hCtx.effChatID, hCtx.effChatID, hCtx.effMsg.Message); err != nil {
+			l_.WithError(err).Error("error auto forward")
+		}
 		return nil
 	},
 }
