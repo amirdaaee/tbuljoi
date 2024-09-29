@@ -14,7 +14,8 @@ func GetMessageById(ctx *Context, id int) *tg.Message {
 	}
 	messages_cls, err := ctx.Raw.MessagesGetMessages(context.Background(), []tg.InputMessageClass{&req})
 	if err != nil {
-		panic(err)
+		logrus.Error(err)
+		return nil
 	}
 	messages := messages_cls.(*tg.MessagesMessages)
 	message_cls := messages.Messages[0]
@@ -74,7 +75,10 @@ func GetInviteLinksFromContent(msg *tg.Message) []InviteLink {
 
 func ModifyMessage(ctx *Context, chatID int64, msg *types.Message, newText string, append bool) {
 	if append {
-		newText = GetMessageById(ctx, msg.ID).Message + "\n" + newText
+		oldMsg := GetMessageById(ctx, msg.ID)
+		if oldMsg != nil {
+			newText = oldMsg.Message + "\n" + newText
+		}
 	}
 	chReq := tg.MessagesEditMessageRequest{
 		Flags:                msg.Flags,
