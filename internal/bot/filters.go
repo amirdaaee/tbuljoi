@@ -21,17 +21,9 @@ func isAF(m *types.Message) bool {
 		return false
 	}
 	afCache := GetAFCache()
-	peerIDCls := m.PeerID
-	var peerID int64
-	switch v := peerIDCls.(type) {
-	case *tg.PeerUser:
-		peerID = v.UserID
-	case *tg.PeerChat:
-		peerID = v.ChatID
-	case *tg.PeerChannel:
-		peerID = v.ChannelID
-	default:
-		logrus.Errorf("unexpected peer type: %T", v)
+	peerID, err := getPeerID(m)
+	if err != nil {
+		logrus.Errorf("error getting peer id: %s", err)
 		return false
 	}
 	peerIDStr := fmt.Sprintf("%d", peerID)
@@ -73,17 +65,9 @@ func isAF(m *types.Message) bool {
 }
 func isAFRelaxed(m *types.Message) bool {
 	afCache := GetAFRelaxCache()
-	peerIDCls := m.PeerID
-	var peerID int64
-	switch v := peerIDCls.(type) {
-	case *tg.PeerUser:
-		peerID = v.UserID
-	case *tg.PeerChat:
-		peerID = v.ChatID
-	case *tg.PeerChannel:
-		peerID = v.ChannelID
-	default:
-		logrus.Errorf("unexpected peer type: %T", v)
+	peerID, err := getPeerID(m)
+	if err != nil {
+		logrus.Errorf("error getting peer id: %s", err)
 		return false
 	}
 	peerIDStr := fmt.Sprintf("%d", peerID)
@@ -103,7 +87,20 @@ func isAFRelaxed(m *types.Message) bool {
 		return false
 	}
 }
-
+func getPeerID(m *types.Message) (int64, error) {
+	var peerID int64
+	switch v := m.PeerID.(type) {
+	case *tg.PeerUser:
+		peerID = v.UserID
+	case *tg.PeerChat:
+		peerID = v.ChatID
+	case *tg.PeerChannel:
+		peerID = v.ChannelID
+	default:
+		return 0, fmt.Errorf("unexpected peer type: %T", v)
+	}
+	return peerID, nil
+}
 func filterReqJoin(m *types.Message) bool {
 	return isFromSelf(m) && m.Text == "/j"
 }
