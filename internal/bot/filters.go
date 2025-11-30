@@ -116,6 +116,9 @@ func filterReqFwd(m *types.Message) bool {
 func filterReqFwdArch(m *types.Message) bool {
 	return isFromSelf(m) && m.Text == "/ff"
 }
+func filterReqFwdAllMediaArch(m *types.Message) bool {
+	return isFromSelf(m) && m.Text == "/fm"
+}
 func filterReqAFSet(m *types.Message) bool {
 	return isFromSelf(m) && strings.HasPrefix(m.Text, "/af ")
 }

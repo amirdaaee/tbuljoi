@@ -12,10 +12,12 @@ func StartBot() {
 	if err != nil {
 		panic(err)
 	}
+	logrus.Warn("Bot client initialized")
 	disp := cl.Dispatcher
 	disp.AddHandlerToGroup(handlers.NewMessage(filters.MessageFilter(filterReqJoin), tgHandle(joinHandler, true)), 1)
 	disp.AddHandlerToGroup(handlers.NewMessage(filters.MessageFilter(filterReqUnjoin), tgHandle(unjoinHandler, false)), 1)
 	disp.AddHandlerToGroup(handlers.NewMessage(filters.MessageFilter(filterReqFwd), tgHandle(forwToSelfHandler, true)), 1)
+	disp.AddHandlerToGroup(handlers.NewMessage(filters.MessageFilter(filterReqFwdAllMediaArch), tgHandle(forwAllMediaToArchHandler, false)), 1)
 	disp.AddHandlerToGroup(handlers.NewMessage(filters.MessageFilter(filterReqFwdArch), tgHandle(forwToArchHandler, true)), 1)
 	disp.AddHandlerToGroup(handlers.NewMessage(filters.MessageFilter(filterReqAFSet), tgHandle(setAutoForword, false)), 1)
 	disp.AddHandlerToGroup(handlers.NewMessage(filters.MessageFilter(filterAF), tgHandle(autoForword, false)), 1)

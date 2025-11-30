@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/celestix/gotgproto/types"
 	"github.com/gotd/td/tg"
@@ -105,4 +106,119 @@ func ForwardMessage(ctx *Context, FromChatID int64, ToChatID int64, msg *tg.Mess
 	}
 	_, err := ctx.ForwardMessages(FromChatID, ToChatID, &fwReq)
 	return err
+}
+func AllMediaInChat(ctx *Context, FromChatID int64) ([]*tg.Message, error) {
+	// Get InputPeer from chatID
+	peer := ctx.PeerStorage.GetInputPeerById(FromChatID)
+	if peer == nil {
+		logrus.WithField("chat_id", FromChatID).Error("failed to get input peer")
+		return nil, fmt.Errorf("failed to get input peer for chat_id: %d", FromChatID)
+	}
+
+	messageMap := make(map[int]*tg.Message)
+	limit := 100 // Telegram API limit
+
+	photoVideoFilter := &tg.InputMessagesFilterPhotoVideo{}
+	err := searchMediaMessages(ctx, peer, photoVideoFilter, messageMap, limit)
+	if err != nil {
+		logrus.WithError(err).Error("error searching photo/video messages")
+	}
+	documentFilter := &tg.InputMessagesFilterDocument{}
+	err = searchMediaMessages(ctx, peer, documentFilter, messageMap, limit)
+	if err != nil {
+		logrus.WithError(err).Error("error searching document messages")
+	}
+	videoNoteFilter := &tg.InputMessagesFilterRoundVideo{}
+	err = searchMediaMessages(ctx, peer, videoNoteFilter, messageMap, limit)
+	if err != nil {
+		logrus.WithError(err).Error("error searching video note messages")
+	}
+
+	// Convert map to slice
+	allMediaMessages := make([]*tg.Message, 0, len(messageMap))
+	for _, msg := range messageMap {
+		allMediaMessages = append(allMediaMessages, msg)
+	}
+
+	return allMediaMessages, nil
+}
+
+func searchMediaMessages(ctx *Context, peer tg.InputPeerClass, filter tg.MessagesFilterClass, results map[int]*tg.Message, limit int) error {
+	offsetID := 0
+	prevOffsetID := -1
+
+	for {
+		req := &tg.MessagesSearchRequest{
+			Peer:     peer,
+			Q:        "", // Empty query to get all messages
+			Filter:   filter,
+			OffsetID: offsetID,
+			Limit:    limit,
+		}
+
+		resp, err := ctx.Raw.MessagesSearch(ctx, req)
+		if err != nil {
+			return err
+		}
+
+		var messages *tg.MessagesMessages
+		switch v := resp.(type) {
+		case *tg.MessagesMessages:
+			messages = v
+		case *tg.MessagesMessagesSlice:
+			messages = &tg.MessagesMessages{
+				Messages: v.Messages,
+				Chats:    v.Chats,
+				Users:    v.Users,
+			}
+		default:
+			logrus.WithField("type", fmt.Sprintf("%T", v)).Warn("unexpected response type")
+			return nil
+		}
+
+		if len(messages.Messages) == 0 {
+			break
+		}
+
+		// Extract messages with media and find minimum ID for pagination
+		minID := -1
+		for _, msgClass := range messages.Messages {
+			msg, ok := msgClass.(*tg.Message)
+			if !ok {
+				continue
+			}
+			// Double-check that message has media
+			if msg.Media != nil {
+				// Deduplicate by message ID
+				if _, exists := results[msg.ID]; !exists {
+					results[msg.ID] = msg
+				}
+				// Track minimum ID for pagination (oldest message)
+				if minID == -1 || msg.ID < minID {
+					minID = msg.ID
+				}
+			}
+		}
+
+		// If no media messages found in this batch, break
+		if minID == -1 {
+			break
+		}
+
+		// Update offset for next iteration (search for older messages)
+		prevOffsetID = offsetID
+		offsetID = minID
+
+		// If we got fewer messages than requested, we've reached the end
+		if len(messages.Messages) < limit {
+			break
+		}
+
+		// If offsetID didn't change, break to avoid infinite loop
+		if offsetID == prevOffsetID {
+			break
+		}
+	}
+
+	return nil
 }

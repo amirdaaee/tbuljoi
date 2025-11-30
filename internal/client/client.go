@@ -3,6 +3,7 @@ package client
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/amirdaaee/tbuljoi/internal/settings"
@@ -12,8 +13,10 @@ import (
 	"github.com/gotd/contrib/middleware/floodwait"
 	"github.com/gotd/contrib/middleware/ratelimit"
 	"github.com/gotd/td/telegram"
+	"github.com/gotd/td/telegram/dcs"
 	"github.com/gotd/td/tg"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/net/proxy"
 	"golang.org/x/time/rate"
 )
 
@@ -23,12 +26,27 @@ func GetClient() (*gotgproto.Client, error) {
 	device := telegram.DeviceConfig{}
 	device.SetDefaults()
 	device.DeviceModel = cfg.DeviceName
+
 	cl_opts := &gotgproto.ClientOpts{
 		DisableCopyright: true,
 		Session:          sessionMaker.SqlSession(sqlite.Open(cfg.SessionFile)),
 		AuthConversator:  auth_convert,
 		Middlewares:      []telegram.Middleware{floodwait.NewSimpleWaiter().WithMaxRetries(4).WithMaxWait(time.Duration(cfg.MaxFloodWait) * time.Second), ratelimit.New(rate.Every(500*time.Millisecond), 20)},
 		Device:           &device,
+	}
+	if cfg.TGSocksProxy != "" {
+		socksURL, err := url.Parse(cfg.TGSocksProxy)
+		if err != nil {
+			return nil, err
+		}
+		logrus.Warnf("using socks5 proxy: %s", cfg.TGSocksProxy)
+		sock5, err := proxy.SOCKS5("tcp", fmt.Sprintf("%s:%s", socksURL.Hostname(), socksURL.Port()), nil, proxy.Direct)
+		if err != nil {
+			return nil, err
+		}
+		dc := sock5.(proxy.ContextDialer)
+		cl_opts.Resolver = dcs.Plain(dcs.PlainOptions{Dial: dc.DialContext})
+		logrus.Warn("socks5 proxy configured")
 	}
 	client, err := gotgproto.NewClient(
 		cfg.AppID,

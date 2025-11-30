@@ -3,6 +3,7 @@ package bot
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/amirdaaee/tbuljoi/internal/client"
 	"github.com/amirdaaee/tbuljoi/internal/db"
@@ -89,6 +90,26 @@ var forwToArchHandler = handlerType{
 	name: "forw-to-arch",
 	runFN: func(hCtx *handleCtx, l_ *logrus.Entry, cl_ *ClientLogger) error {
 		return client.ForwardMessage(hCtx.clCtx, hCtx.effChatID, settings.Config().ArchiveChatID, hCtx.orgMsg)
+	},
+}
+var forwAllMediaToArchHandler = handlerType{
+	name: "forw-all-media-to-arch",
+	runFN: func(hCtx *handleCtx, l_ *logrus.Entry, cl_ *ClientLogger) error {
+		mediaList, err := client.AllMediaInChat(hCtx.clCtx, hCtx.effChatID)
+		if err != nil {
+			cl_.log(l_.Error, fmt.Sprintf("error getting media list: %s", err.Error()), true)
+			return err
+		}
+		for _, media := range mediaList {
+			err = client.ForwardMessage(hCtx.clCtx, hCtx.effChatID, settings.Config().ArchiveChatID, media)
+			if err != nil {
+				cl_.log(l_.Error, fmt.Sprintf("error forwarding media: %s", err.Error()), true)
+			} else {
+				cl_.log(l_.Info, fmt.Sprintf("forwarded media: %d", media.ID), true)
+			}
+			time.Sleep(1 * time.Second)
+		}
+		return nil
 	},
 }
 
